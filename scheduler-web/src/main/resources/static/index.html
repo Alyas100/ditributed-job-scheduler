@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Distributed Job Scheduler</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .cluster-status {
+            background: linear-gradient(135deg, #e8f5e8, #d4edda);
+        }
+        .jobs-list {
+            background: linear-gradient(135deg, #f0f8ff, #e3f2fd);
+        }
+        .plugins-card {
+            background: linear-gradient(135deg, #fff3e0, #ffecb3);
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            border: none;
+            border-radius: 5px;
+            background: #007bff;
+            color: white;
+            font-weight: bold;
+        }
+        button:hover { background: #0056b3; }
+        button.delete { background: #dc3545; }
+        button.delete:hover { background: #c82333; }
+        .healthy { color: #28a745; font-weight: bold; }
+        .unhealthy { color: #dc3545; font-weight: bold; }
+        .job-item {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+            background: white;
+        }
+        .status-badge {
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .status-scheduled { background: #17a2b8; color: white; }
+        .status-running { background: #ffc107; color: black; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>Distributed Job Scheduler</h1>
+        <p>Manage and monitor your scheduled jobs</p>
+    </div>
+
+    <div class="card cluster-status" id="clusterStatus">
+        <h2>Cluster Status</h2>
+        <div id="clusterInfo">Loading cluster status...</div>
+    </div>
+
+    <div class="card plugins-card">
+        <h2>Available Plugins</h2>
+        <div id="pluginsList">Loading plugins...</div>
+    </div>
+
+    <div class="card jobs-list">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+            <h2>Scheduled Jobs</h2>
+            <div>
+                <button onclick="loadJobs()">🔄 Refresh</button>
+                <button onclick="showCreateJobForm()">➕ Create Job</button>
+            </div>
+        </div>
+        <div id="jobsList">Loading jobs...</div>
+    </div>
+
+    <!-- Create Job Form (hidden by default) -->
+    <div id="createJobForm" style="display: none;" class="card">
+        <h3>Create New Job</h3>
+        <form id="jobForm">
+            <div style="margin: 10px 0;">
+                <label>Job ID:</label>
+                <input type="text" id="jobId" required style="width: 100%; padding: 8px; margin: 5px 0;">
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Job Name:</label>
+                <input type="text" id="jobName" required style="width: 100%; padding: 8px; margin: 5px 0;">
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Plugin:</label>
+                <select id="pluginName" required style="width: 100%; padding: 8px; margin: 5px 0;">
+                    <option value="">Select a plugin...</option>
+                </select>
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Cron Expression:</label>
+                <input type="text" id="cronExpression" placeholder="*/30 * * * * *" style="width: 100%; padding: 8px; margin: 5px 0;">
+            </div>
+            <div style="margin: 10px 0;">
+                <label>Message (for simple-logger):</label>
+                <input type="text" id="jobMessage" placeholder="Hello from scheduler!" style="width: 100%; padding: 8px; margin: 5px 0;">
+            </div>
+            <div>
+                <button type="submit">Create Job</button>
+                <button type="button" onclick="hideCreateJobForm()">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Load cluster status
+    function loadClusterStatus() {
+        fetch('/api/cluster/status')
+            .then(r => {
+                if (!r.ok) throw new Error('Cluster status failed');
+                return r.json();
+            })
+            .then(data => {
+                document.getElementById('clusterInfo').innerHTML = `
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                        <div><strong>Mode:</strong> ${data.mode}</div>
+<!--                        <div><strong>Leader:</strong> ${data.leaderId}</div>-->
+                        <div><strong>Nodes:</strong> ${data.activeNodes}/${data.totalNodes} active</div>
+                        <div><strong>Health:</strong> <span class="${data.healthy ? 'healthy' : 'unhealthy'}">${data.healthy ? 'HEALTHY' : 'UNHEALTHY'}</span></div>
+                        <div><strong>Quorum:</strong> ${data.hasQuorum ? 'YES' : 'NO'}</div>
+                    </div>
+                `;
+            })
+            .catch(error => {
+                document.getElementById('clusterInfo').innerHTML = `<p style="color: red;">Error loading cluster status: ${error.message}</p>`;
+            });
+    }
+
+    // Load plugins
+    function loadPlugins() {
+        fetch('/api/plugins')
+            .then(r => {
+                if (!r.ok) throw new Error('Plugins load failed');
+                return r.json();
+            })
+            .then(plugins => {
+                const pluginsList = document.getElementById('pluginsList');
+                const pluginSelect = document.getElementById('pluginName');
+
+                pluginsList.innerHTML = plugins.map(p =>
+                    `<span style="background:#6c757d; color:white; padding:6px 12px; margin:4px; border-radius:15px; display:inline-block; font-size:14px;">${p}</span>`
+                ).join('');
+
+                // Populate plugin dropdown
+                pluginSelect.innerHTML = '<option value="">Select a plugin...</option>' +
+                    plugins.map(p => `<option value="${p}">${p}</option>`).join('');
+            })
+            .catch(error => {
+                document.getElementById('pluginsList').innerHTML = `<p style="color: red;">Error loading plugins: ${error.message}</p>`;
+            });
+    }
+
+    // Load jobs
+    function loadJobs() {
+        fetch('/api/jobs')
+            .then(r => {
+                if (!r.ok) throw new Error('Jobs load failed');
+                return r.json();
+            })
+            .then(jobs => {
+                const jobsList = document.getElementById('jobsList');
+
+                if (jobs.length === 0) {
+                    jobsList.innerHTML = '<p>No jobs scheduled. Create your first job!</p>';
+                    return;
+                }
+
+                jobsList.innerHTML = jobs.map(job => `
+                    <div class="job-item">
+                        <div style="display: flex; justify-content: space-between; align-items: start;">
+                            <div style="flex: 1;">
+                                <h3 style="margin: 0 0 10px 0;">${job.jobName}</h3>
+                                <p style="margin: 5px 0;"><strong>ID:</strong> ${job.jobId}</p>
+                                <p style="margin: 5px 0;"><strong>Plugin:</strong> ${job.pluginName}</p>
+                                <p style="margin: 5px 0;"><strong>Schedule:</strong> <code>${job.cronExpression || 'Manual'}</code></p>
+                                <p style="margin: 5px 0;"><strong>Status:</strong>
+                                    <span class="status-badge status-scheduled">${job.status}</span>
+                                </p>
+                            </div>
+                            <div style="display: flex; flex-direction: column; gap: 5px;">
+                                <button onclick="executeJob('${job.jobId}')">Run Now</button>
+                                <button class="delete" onclick="deleteJob('${job.jobId}')">Delete</button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            })
+            .catch(error => {
+                document.getElementById('jobsList').innerHTML = `<p style="color: red;">Error loading jobs: ${error.message}</p>`;
+            });
+    }
+
+    function executeJob(jobId) {
+        fetch(`/api/jobs/${jobId}/execute`, { method: 'POST' })
+            .then(r => r.text())
+            .then(msg => {
+                alert('Job execution started: ' + jobId);
+                loadJobs(); // Refresh the list
+            })
+            .catch(error => alert('Error: ' + error.message));
+    }
+
+    function deleteJob(jobId) {
+        if (confirm(`Are you sure you want to delete job "${jobId}"?`)) {
+            fetch(`/api/jobs/${jobId}`, { method: 'DELETE' })
+                .then(() => {
+                    loadJobs(); // Refresh the list
+                })
+                .catch(error => alert('Error: ' + error.message));
+        }
+    }
+
+    function showCreateJobForm() {
+        document.getElementById('createJobForm').style.display = 'block';
+    }
+
+    function hideCreateJobForm() {
+        document.getElementById('createJobForm').style.display = 'none';
+        document.getElementById('jobForm').reset();
+    }
+
+    // Handle form submission
+    document.getElementById('jobForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const jobData = {
+            jobId: document.getElementById('jobId').value,
+            jobName: document.getElementById('jobName').value,
+            pluginName: document.getElementById('pluginName').value,
+            cronExpression: document.getElementById('cronExpression').value,
+            parameters: {
+                message: document.getElementById('jobMessage').value || 'Hello from scheduler!'
+            },
+            enabled: true,
+            maxRetries: 3
+        };
+
+        fetch('/api/jobs', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(jobData)
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Job creation failed');
+            return r.json();
+        })
+        .then(() => {
+            hideCreateJobForm();
+            loadJobs(); // Refresh the list
+            alert('Job created successfully!');
+        })
+        .catch(error => alert('Error creating job: ' + error.message));
+    });
+
+    // Initial load
+    loadClusterStatus();
+    loadPlugins();
+    loadJobs();
+
+    // Auto-refresh every 30 seconds
+    setInterval(loadClusterStatus, 30000);
+    setInterval(loadJobs, 30000);
+</script>
+</body>
+</html>

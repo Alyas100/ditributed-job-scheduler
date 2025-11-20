@@ -1,0 +1,43 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+  <modelVersion>4.0.0</modelVersion>
+
+  <!-- SPRING BOOT PARENT -->
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.2.0</version> <!-- or your version -->
+    <relativePath/> <!-- lookup from repo -->
+  </parent>
+
+  <groupId>org.github.Alyas100</groupId>
+  <artifactId>distributed-job-schedulerr</artifactId>
+  <version>1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <modules>
+    <module>scheduler-plugin-api</module>
+    <module>scheduler-core</module>
+    <module>scheduler-plugins</module>
+    <module>scheduler-storage</module>
+    <module>scheduler-cluster</module>
+    <module>scheduler-web</module>
+  </modules>
+
+  <properties>
+    <java.version>17</java.version>
+  </properties>
+
+  <dependencies>
+    <!-- Only test dependencies here -->
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+</project>
